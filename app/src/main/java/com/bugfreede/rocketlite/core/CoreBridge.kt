@@ -1,5 +1,6 @@
 package com.bugfreede.rocketlite.core
 
+import android.content.Context
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -7,10 +8,9 @@ import kotlinx.coroutines.flow.asStateFlow
 enum class CoreState { IDLE, CONNECTING, CONNECTED, ERROR }
 
 /**
- * The seam between the app and the proxy core.
- * Phase 2 replaces [StubCoreEngine] with a libbox-backed implementation:
- * the service keeps owning the Android VpnService side, the engine owns
- * the sing-box instance configured with [SingBoxConfig] output.
+ * The seam between the app and the proxy core. [LibboxEngine] is the real
+ * implementation (sing-box via libbox); [StubCoreEngine] remains only as a
+ * pre-init fallback so the UI can always read a state flow.
  */
 interface CoreEngine {
     val state: StateFlow<CoreState>
@@ -19,10 +19,7 @@ interface CoreEngine {
     suspend fun stop()
 }
 
-/**
- * Placeholder until libbox lands. It deliberately fails fast with an
- * honest message instead of pretending to tunnel traffic nowhere.
- */
+/** Fails fast with an honest message; used before [EngineHolder.init]. */
 class StubCoreEngine : CoreEngine {
     private val _state = MutableStateFlow(CoreState.IDLE)
     override val state: StateFlow<CoreState> = _state.asStateFlow()
@@ -32,9 +29,7 @@ class StubCoreEngine : CoreEngine {
 
     override suspend fun start(configJson: String) {
         _state.value = CoreState.CONNECTING
-        // TODO(phase 2): hand configJson to libbox (Libbox.newStandaloneCommandClient
-        // / BoxService) and report CONNECTED once the core is up.
-        _error.value = "sing-box 核心尚未接入（二期接入 libbox 后可用）"
+        _error.value = "核心尚未初始化"
         _state.value = CoreState.ERROR
     }
 
@@ -45,5 +40,24 @@ class StubCoreEngine : CoreEngine {
 }
 
 object EngineHolder {
-    val engine: CoreEngine = StubCoreEngine()
+    @Volatile
+    private var libboxEngine: LibboxEngine? = null
+
+    private val fallback: CoreEngine = StubCoreEngine()
+
+    fun init(context: Context) {
+        if (libboxEngine == null) {
+            synchronized(this) {
+                if (libboxEngine == null) {
+                    libboxEngine = LibboxEngine(context.applicationContext)
+                }
+            }
+        }
+    }
+
+    val engine: CoreEngine
+        get() = libboxEngine ?: fallback
+
+    val libbox: LibboxEngine?
+        get() = libboxEngine
 }

@@ -75,6 +75,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         NodeStore.init(this)
+        EngineHolder.init(this)
         setContent {
             RocketLiteTheme {
                 MainScreen()
