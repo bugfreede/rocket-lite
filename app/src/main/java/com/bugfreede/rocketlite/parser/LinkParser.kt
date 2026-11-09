@@ -155,12 +155,12 @@ object LinkParser {
 
     private fun looksLikeBase64(s: String): Boolean {
         if (s.contains("://")) return false
-        val compact = s.replace("\s".toRegex(), "")
+        val compact = s.filterNot { it.isWhitespace() }
         return compact.length % 4 != 1 && compact.all { it.isLetterOrDigit() || it in "+/=_-" }
     }
 
     fun decodeBase64(s: String): String? {
-        val cleaned = s.replace("\s".toRegex(), "").replace('-', '+').replace('_', '/')
+        val cleaned = s.filterNot { it.isWhitespace() }.replace('-', '+').replace('_', '/')
         val padded = cleaned + "=".repeat((4 - cleaned.length % 4) % 4)
         return try {
             String(Base64.getDecoder().decode(padded), Charsets.UTF_8)
