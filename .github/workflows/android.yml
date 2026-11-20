@@ -1,3 +1,17 @@
+# Corrected workflow for bugfreede/rocket-lite — prepared 2026-11-10 (Asia/Shanghai).
+# Diff vs commit 4532aa7 (.github/workflows/android.yml, fetched from GitHub 2026-11-10 08:37 UTC):
+#   ONLY the "Build libbox.aar" step changes:
+#   - `gomobile init` -> `gomobile init || true`
+#       (the Box-verified script libbox_build_lean.sh runs it with `|| true`;
+#        the CI copy dropped the tolerance. Run #1 for tag v0.2.0-phase2 died
+#        in this step after ~1 min; this is the leading suspect. Exact failing
+#        command inside the step is still unverified — the job log page
+#        would not load during preparation.)
+#   - adds `export GOMAXPROCS=2 GOFLAGS="-p=2"` (same as the Box-verified script).
+# Everything else is byte-identical to the fetched workflow.
+# To apply (needs the Box agent back, or any git access to the repo):
+#   cp this file to .github/workflows/android.yml, commit, push master,
+#   then re-trigger: delete + re-push tag v0.2.0-phase2, or push a new tag.
 name: Android Build & Release
 
 on:
@@ -38,11 +52,16 @@ jobs:
           GOPROXY: https://proxy.golang.org,direct
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
+          export GOMAXPROCS=2 GOFLAGS="-p=2"
           go install golang.org/x/mobile/cmd/gomobile@latest
           go install golang.org/x/mobile/cmd/gobind@latest
           git clone --depth 1 --branch v1.11.15 https://github.com/SagerNet/sing-box.git "$HOME/sing-box"
           cd "$HOME/sing-box"
-          gomobile init
+          # Box-verified script runs this with `|| true`: on current
+          # golang.org/x/mobile it can fail even when `gomobile bind`
+          # works fine afterwards. Without the tolerance the whole
+          # step (and the run) dies here — the v0.2.0-phase2 failure.
+          gomobile init || true
           go get -tool golang.org/x/mobile/cmd/gobind@latest
           mkdir -p "$GITHUB_WORKSPACE/app/libs"
           gomobile bind -target android/arm64 -androidapi 26 \
